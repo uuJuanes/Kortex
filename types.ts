@@ -150,3 +150,10 @@ export interface TaskGenerationContext {
   boardTitle: string;
   boardLists: { id: string; title: string }[];
 }
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'model';
+  text: string;
+  userAvatar?: string;
+}

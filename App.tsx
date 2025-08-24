@@ -17,6 +17,9 @@ import TeamsView from './components/TeamSelectionScreen';
 import { KortexLogo } from './components/icons/KortexLogo';
 import TemplateSelectionModal from './components/TemplateSelectionModal';
 import TemplateCustomizationModal from './components/TemplateCustomizationModal';
+import { ChatBubbleLeftRightIcon } from './components/icons/ChatBubbleLeftRightIcon';
+import ChatWindow from './components/Chat/ChatWindow';
+
 
 // This interface now describes the rich, professional board structure we expect from the AI.
 export interface AIGeneratedCard {
@@ -92,6 +95,7 @@ const App: React.FC = () => {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isTemplateCustomizationModalOpen, setIsTemplateCustomizationModalOpen] = useState(false);
   const [selectedTemplateForCustomization, setSelectedTemplateForCustomization] = useState<BoardTemplate | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   
   // New state management for views
@@ -498,6 +502,23 @@ const App: React.FC = () => {
           {renderAppView()}
         </div>
       </div>
+      
+      {view === 'app' && (
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="fixed bottom-6 right-6 bg-primary hover:bg-primary/90 text-white rounded-full p-4 shadow-lg transform transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-default focus:ring-primary z-50"
+          aria-label="Abrir asistente de IA"
+        >
+          <ChatBubbleLeftRightIcon className="w-7 h-7" />
+        </button>
+      )}
+
+      {isChatOpen && currentUser && (
+        <ChatWindow
+          currentUser={currentUser}
+          onClose={() => setIsChatOpen(false)}
+        />
+      )}
 
       {isGenerateBoardModalOpen && (
         <GenerateBoardModal
