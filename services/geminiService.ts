@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Card, User, Board as BoardType, BoardAnalysis, Team, TeamAnalysis, TaskGenerationContext, BoardTemplate } from "../types";
 import { AIGeneratedBoard } from "../App";
@@ -20,10 +21,6 @@ interface GeminiBoardResponse {
 }
 
 export const generateTasks = async (goal: string, context: { boardTitle: string; listTitle: string; boardLists: {id: string; title: string}[] }): Promise<Omit<Card, 'id' | 'labels' | 'checklist' | 'members' | 'attachments' | 'comments'>[]> => {
-  if (!API_KEY) {
-    throw new Error("API Key not configured.");
-  }
-
   // Determine AI persona based on context
   const boardTitleLower = context.boardTitle.toLowerCase();
   let persona = "un experto gestor de proyectos.";
@@ -98,10 +95,6 @@ export const generateTasks = async (goal: string, context: { boardTitle: string;
 
 
 export const generateBoard = async (projectDescription: string, template?: BoardTemplate): Promise<AIGeneratedBoard> => {
-  if (!API_KEY) {
-    throw new Error("API Key not configured.");
-  }
-  
   let mainPrompt: string;
 
   if (template) {
@@ -296,9 +289,6 @@ export const findBestUserForTask = async (
   task: { title: string; description: string },
   users: User[]
 ): Promise<string> => {
-  if (!API_KEY) {
-    throw new Error("API Key not configured.");
-  }
   if (users.length === 0) {
     throw new Error("No users available to assign the task to.");
   }
@@ -353,10 +343,6 @@ Basado en la especialización y experiencia descrita en los resúmenes de perfil
 };
 
 export const analyzeBoard = async (board: BoardType, members: User[]): Promise<BoardAnalysis> => {
-    if (!API_KEY) {
-        throw new Error("API Key not configured.");
-    }
-
     // Simplify the board data for a cleaner prompt
     const simplifiedBoard = {
         title: board.title,
@@ -447,10 +433,6 @@ La salida DEBE ser un objeto JSON que se ajuste estrictamente al esquema proporc
 };
 
 export const analyzeTeam = async (team: Team, members: User[]): Promise<TeamAnalysis> => {
-    if (!API_KEY) {
-        throw new Error("API Key not configured.");
-    }
-    
     const simplifiedBoards = team.boards.map(board => {
         const allCards = board.lists.flatMap(l => l.cards);
         const doneListTitles = ['hecho', 'done', 'finalizado'];

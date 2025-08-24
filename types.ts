@@ -1,4 +1,10 @@
 
+declare var process: {
+  env: {
+    API_KEY?: string;
+  }
+};
+
 export interface Label {
   id: string;
   text: string;
