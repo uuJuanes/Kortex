@@ -1,13 +1,8 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Card, User, Board as BoardType, BoardAnalysis, Team, TeamAnalysis, TaskGenerationContext, BoardTemplate } from "../types";
 import { AIGeneratedBoard } from "../App";
 
 const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  console.error("Gemini API key is not set. Please set the process.env.API_KEY environment variable.");
-}
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 

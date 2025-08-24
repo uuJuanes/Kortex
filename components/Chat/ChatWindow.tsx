@@ -21,18 +21,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, onClose }) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!API_KEY) {
-      setMessages([
-        {
-          id: 'error-1',
-          sender: 'model',
-          text: 'Error: La clave de API de Gemini no está configurada. El chat no funcionará.',
-        }
-      ]);
-      return;
-    }
-
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const ai = new GoogleGenAI({ apiKey: API_KEY! });
     const newChat = ai.chats.create({
       model: 'gemini-2.5-flash',
       config: {
