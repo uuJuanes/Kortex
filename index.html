@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kortex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --color-bg-default: #F9FAFB;
+        --color-bg-subtle: #F3F4F6;
+        --color-bg-card: #FFFFFF;
+        --color-text-default: #111827;
+        --color-text-muted: #6B7280;
+        --color-border-default: #E5E7EB;
+        
+        --color-primary: #2563EB;
+        --color-primary-light: #DBEAFE;
+        --color-primary-text: #1E40AF;
+        
+        --color-secondary: #22C55E;
+        --color-secondary-light: #DCFCE7;
+        --color-secondary-text: #166534;
+        
+        --color-accent: #9333EA;
+        --color-accent-light: #F3E8FF;
+        --color-accent-text: #6B21A8;
+
+        --color-danger: #EF4444;
+        --color-danger-light: #FEE2E2;
+        --color-danger-text: #B91C1C;
+        
+        --color-warning: #F59E0B;
+        --color-warning-light: #FEF3C7;
+        --color-warning-text: #B45309;
+        
+        --color-info: #3B82F6;
+        --color-info-light: #DBEAFE;
+        --color-info-text: #1E40AF;
+        
+        --color-gray: #6B7280;
+        --color-gray-light: #F3F4F6;
+        --color-gray-text: #374151;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --color-bg-default: #111827;
+          --color-bg-subtle: #1F2937;
+          --color-bg-card: #1F2937;
+          --color-text-default: #F9FAFB;
+          --color-text-muted: #9CA3AF;
+          --color-border-default: #374151;
+          
+          --color-primary-light: #1E3A8A;
+          --color-primary-text: #93C5FD;
+          
+          --color-secondary-light: #166534;
+          --color-secondary-text: #86EFAC;
+          
+          --color-accent-light: #5B21B6;
+          --color-accent-text: #C4B5FD;
+
+          --color-danger-light: #991B1B;
+          --color-danger-text: #FCA5A5;
+
+          --color-warning-light: #92400E;
+          --color-warning-text: #FCD34D;
+          
+          --color-info-light: #1E40AF;
+          --color-info-text: #93C5FD;
+
+          --color-gray-light: #374151;
+          --color-gray-text: #D1D5DB;
+        }
+      }
+      body {
+        background-color: var(--color-bg-default);
+        color: var(--color-text-default);
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              background: {
+                default: 'var(--color-bg-default)',
+                subtle: 'var(--color-bg-subtle)',
+                card: 'var(--color-bg-card)',
+              },
+              text: {
+                default: 'var(--color-text-default)',
+                muted: 'var(--color-text-muted)',
+              },
+              border: {
+                default: 'var(--color-border-default)'
+              },
+              primary: {
+                DEFAULT: 'var(--color-primary)',
+                light: 'var(--color-primary-light)',
+                text: 'var(--color-primary-text)',
+              },
+              secondary: {
+                DEFAULT: 'var(--color-secondary)',
+                light: 'var(--color-secondary-light)',
+                text: 'var(--color-secondary-text)',
+              },
+              accent: {
+                DEFAULT: 'var(--color-accent)',
+                light: 'var(--color-accent-light)',
+                text: 'var(--color-accent-text)',
+              },
+              danger: {
+                DEFAULT: 'var(--color-danger)',
+                light: 'var(--color-danger-light)',
+                text: 'var(--color-danger-text)',
+              },
+              warning: {
+                DEFAULT: 'var(--color-warning)',
+                light: 'var(--color-warning-light)',
+                text: 'var(--color-warning-text)',
+              },
+              info: {
+                DEFAULT: 'var(--color-info)',
+                light: 'var(--color-info-light)',
+                text: 'var(--color-info-text)',
+              },
+              gray: {
+                DEFAULT: 'var(--color-gray)',
+                light: 'var(--color-gray-light)',
+                text: 'var(--color-gray-text)',
+              },
+            },
+            boxShadow: {
+              'subtle': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+              'md': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+              'lg': '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+            },
+            borderRadius: {
+                'lg': '0.75rem', // 12px
+                'xl': '1rem', // 16px
+            }
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.15.0",
+    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.5.136"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
