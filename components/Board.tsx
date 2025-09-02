@@ -136,8 +136,8 @@ const Board: React.FC<BoardProps> = ({ board, onBoardUpdate, users, currentUser,
       description: cardData.description || '',
       labels: cardData.labels,
       dueDate: cardData.dueDate,
-      members: [],
-      attachments: [],
+      members: cardData.members,
+      attachments: cardData.attachments,
       comments: [],
     };
     const updatedLists = board.lists.map(list => {
@@ -234,6 +234,7 @@ const Board: React.FC<BoardProps> = ({ board, onBoardUpdate, users, currentUser,
        {isAddCardModalOpen && targetListIdForNewCard && (
         <AddCardModal
           listId={targetListIdForNewCard}
+          users={users}
           onClose={handleCloseAddCardModal}
           onAddCard={handleAddCard}
         />

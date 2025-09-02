@@ -1,4 +1,6 @@
 
+
+
 import { BoardTemplate } from '../types';
 import { ClipboardListIcon } from '../components/icons/ClipboardListIcon';
 import { TrendingUpIcon } from '../components/icons/TrendingUpIcon';
@@ -6,14 +8,35 @@ import { SparklesIcon } from '../components/icons/SparklesIcon';
 import { UsersGroupIcon } from '../components/icons/UsersGroupIcon';
 import { LightBulbIcon } from '../components/icons/LightBulbIcon';
 import { CodeBracketIcon } from '../components/icons/CodeBracketIcon';
+import { DocumentDuplicateIcon } from '../components/icons/DocumentDuplicateIcon';
 
 export const BOARD_TEMPLATES: BoardTemplate[] = [
+  {
+    id: 'template-blank',
+    name: 'Tablero en Blanco',
+    description: 'Empieza desde cero con un tablero Kanban simple: Por Hacer, En Progreso y Hecho.',
+    icon: DocumentDuplicateIcon,
+    category: 'Personal',
+    board: {
+      title: 'Nuevo Tablero',
+      lists: [
+        { title: 'Por Hacer', cards: [] },
+        { title: 'En Progreso', cards: [] },
+        { title: 'Hecho', cards: [] },
+      ],
+    },
+  },
   {
     id: 'template-dev-advanced',
     name: 'Desarrollo de Software Avanzado',
     description: 'Flujo de trabajo robusto para equipos de desarrollo, con revisión de código, QA y despliegue.',
     icon: CodeBracketIcon,
     category: 'Software',
+    variables: [
+      { key: 'projectName', label: 'Nombre del Proyecto', placeholder: 'Ej: App de Gastos del Hogar', type: 'text' },
+      { key: 'platform', label: 'Plataforma Principal', placeholder: 'Ej: Aplicación Web (React)', type: 'text' },
+      { key: 'mainGoal', label: 'Objetivo Principal', placeholder: 'Ej: Lanzar el sistema de autenticación de usuarios y gestión de tareas del hogar.', type: 'textarea' },
+    ],
     board: {
       title: 'Proyecto de Software',
       lists: [

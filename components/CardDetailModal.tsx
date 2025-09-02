@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card as CardType, ChecklistItem, User, Attachment, Comment, UserRole } from '../types';
 import { XIcon } from './icons/XIcon';
@@ -13,6 +14,9 @@ import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { addFile, deleteFile, getFile } from '../db';
 import AttachmentPreviewModal from './AttachmentPreviewModal';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
+import { summarizeCard } from '../services/geminiService';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { SpinnerIcon } from './icons/SpinnerIcon';
 
 
 interface CardDetailModalProps {
@@ -68,6 +72,8 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, listTitle, user
   const [isAssigning, setIsAssigning] = useState(false);
   const [previewingAttachment, setPreviewingAttachment] = useState<Attachment | null>(null);
   const [newComment, setNewComment] = useState('');
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
@@ -202,6 +208,20 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, listTitle, user
     setNewComment('');
   };
 
+  const handleSummarizeCard = async () => {
+    setIsSummarizing(true);
+    setAiSummary(null);
+    try {
+        const summary = await summarizeCard(editableCard);
+        setAiSummary(summary);
+    } catch (error) {
+        console.error("Failed to summarize card:", error);
+        setAiSummary("No se pudo generar el resumen. Inténtalo de nuevo.");
+    } finally {
+        setIsSummarizing(false);
+    }
+  };
+
   const checklistProgress = editableCard.checklist?.items.length
     ? (editableCard.checklist.items.filter(i => i.completed).length / editableCard.checklist.items.length) * 100
     : 0;
@@ -243,10 +263,20 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, listTitle, user
         <main className="flex-grow p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div>
-              <h3 className="text-lg font-semibold text-text-default flex items-center mb-2">
-                <DescriptionIcon className="w-5 h-5 mr-3 text-text-muted" />
-                Descripción
-              </h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold text-text-default flex items-center">
+                  <DescriptionIcon className="w-5 h-5 mr-3 text-text-muted" />
+                  Descripción
+                </h3>
+                <button 
+                  onClick={handleSummarizeCard} 
+                  disabled={isSummarizing}
+                  className="flex items-center gap-2 px-3 py-1 text-sm font-semibold text-accent-text bg-accent-light rounded-lg hover:bg-opacity-80 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {isSummarizing ? <SpinnerIcon className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
+                  Resumir
+                </button>
+              </div>
               <textarea
                 value={editableCard.description || ''}
                 onChange={(e) => handleFieldChange('description', e.target.value)}
@@ -255,6 +285,24 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, listTitle, user
                 rows={4}
                 disabled={isReadOnly}
               />
+              {isSummarizing && (
+                  <div className="mt-2 text-sm text-text-muted flex items-center justify-center p-3 bg-background-subtle rounded-lg">
+                      <SpinnerIcon className="w-5 h-5 mr-2" />
+                      Generando resumen...
+                  </div>
+              )}
+              {aiSummary && (
+                <div className="mt-4 p-4 bg-accent-light/50 rounded-lg border border-accent/20 relative">
+                    <button onClick={() => setAiSummary(null)} className="absolute top-2 right-2 p-1 text-accent-text/60 hover:text-accent-text">
+                        <XIcon className="w-4 h-4"/>
+                    </button>
+                    <h4 className="font-semibold text-accent-text flex items-center mb-2 text-sm">
+                        <SparklesIcon className="w-4 h-4 mr-2" />
+                        Resumen IA
+                    </h4>
+                    <p className="text-sm text-text-default italic">{aiSummary}</p>
+                </div>
+              )}
             </div>
 
             <div>

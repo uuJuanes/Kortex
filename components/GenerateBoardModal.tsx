@@ -3,6 +3,7 @@ import { generateBoard } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { XIcon } from './icons/XIcon';
 import { AIGeneratedBoard } from '../App';
+import { BOARD_TEMPLATES } from '../constants/templates';
 
 interface GenerateBoardModalProps {
   onClose: () => void;
@@ -22,7 +23,13 @@ const GenerateBoardModal: React.FC<GenerateBoardModalProps> = ({ onClose, onBoar
     setIsLoading(true);
     setError(null);
     try {
-      const generatedBoard = await generateBoard(projectDescription);
+      // FIX: The generateBoard function now requires a template argument.
+      // Using the "Agile" template as a default to fix the call.
+      const defaultTemplate = BOARD_TEMPLATES.find(t => t.id === 'template-agile');
+      if (!defaultTemplate) {
+        throw new Error("Could not find the default 'template-agile' template.");
+      }
+      const generatedBoard = await generateBoard(projectDescription, defaultTemplate);
       onBoardGenerated(generatedBoard);
       onClose();
     } catch (err) {

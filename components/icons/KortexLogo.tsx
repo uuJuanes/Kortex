@@ -1,6 +1,7 @@
+
 import React from 'react';
 
-export const KortexLogo: React.FC<{ className?: string }> = ({ className }) => (
+export const KortexLogo: React.FC<{ className?: string; isCollapsed?: boolean }> = ({ className, isCollapsed }) => (
     <div className={`flex items-center gap-2 ${className}`}>
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <g clipPath="url(#clip0_kortex_logo)">
@@ -19,6 +20,6 @@ export const KortexLogo: React.FC<{ className?: string }> = ({ className }) => (
                 </clipPath>
             </defs>
         </svg>
-        <h1 className="text-2xl font-bold text-text-default hidden sm:block">Kortex</h1>
+        {!isCollapsed && <h1 className="text-2xl font-bold text-text-default">Kortex</h1>}
     </div>
 );

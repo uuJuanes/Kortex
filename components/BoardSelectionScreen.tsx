@@ -1,6 +1,7 @@
 
+
 import React, { useState, useMemo } from 'react';
-import { Board, Team, User, UserRole, BoardTemplate } from '../types';
+import { Board, Team, User, UserRole } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import TeamManagementModal from './TeamManagementModal';
@@ -9,8 +10,11 @@ import ActivityLogModal from './ActivityLogModal';
 import BoardCard from './BoardCard';
 import TeamDashboard from './TeamDashboard';
 import { UsersGroupIcon } from './icons/UsersGroupIcon';
-import TemplateSelectionModal from './TemplateSelectionModal';
 import { TemplateIcon } from './icons/TemplateIcon';
+import TeamChatView from './TeamChatView';
+import { ChartBarIcon } from './icons/ChartBarIcon';
+import { ClipboardListIcon } from './icons/ClipboardListIcon';
+import { ChatBubbleLeftRightIcon } from './icons/ChatBubbleLeftRightIcon';
 
 
 const MemberList: React.FC<{ team: Team, users: User[] }> = ({ team, users }) => {
@@ -45,8 +49,6 @@ interface TeamBoardsScreenProps {
   users: User[]; // Global list of all users
   currentUser: User;
   onSelectBoard: (boardId: string) => void;
-  onCreateBoard: (title: string) => void;
-  onOpenAIGenerator: () => void;
   onOpenTemplateSelector: () => void;
   onRequestDeleteBoard: (boardId: string) => void;
   onUpdateTeam: (updatedTeam: Team) => void;
@@ -54,61 +56,8 @@ interface TeamBoardsScreenProps {
   currentUserRole?: UserRole;
   logActivity: (action: string) => void;
   onCreateUser: (name: string, profileSummary: string) => User;
+  onSendMessage: (teamId: string, messageText: string) => void;
 }
-
-const CreateBoardCard: React.FC<{ onCreateBoard: (title: string) => void }> = ({ onCreateBoard }) => {
-    const [isCreating, setIsCreating] = useState(false);
-    const [title, setTitle] = useState('');
-
-    const handleCreate = () => {
-        if (title.trim()) {
-            onCreateBoard(title.trim());
-            setTitle('');
-            setIsCreating(false);
-        }
-    };
-
-    if (!isCreating) {
-        return (
-            <button
-                onClick={() => setIsCreating(true)}
-                className="w-full h-full min-h-[160px] border-2 border-dashed border-border-default rounded-lg flex flex-col items-center justify-center text-text-muted hover:bg-background-subtle hover:border-primary transition-colors duration-300"
-            >
-                <PlusIcon className="w-10 h-10 mb-2" />
-                <span className="font-semibold">Crear Tablero Vacío</span>
-            </button>
-        );
-    }
-
-    return (
-        <div className="w-full h-full bg-background-card rounded-lg p-4 flex flex-col justify-between border-2 border-primary">
-            <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Título del tablero..."
-                className="w-full bg-background-subtle border border-border-default rounded-md p-2 text-sm text-text-default focus:ring-2 focus:ring-primary focus:border-primary"
-                autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            />
-            <div className="flex items-center justify-end space-x-2 mt-3">
-                 <button onClick={() => setIsCreating(false)} className="px-3 py-1 text-xs text-text-muted rounded-md hover:bg-background-subtle">Cancelar</button>
-                <button onClick={handleCreate} className="px-3 py-1 text-xs text-white bg-primary rounded-md hover:bg-primary/90">Crear</button>
-            </div>
-        </div>
-    )
-};
-
-const AIGenerateCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
-    <button
-        onClick={onOpen}
-        className="w-full h-full min-h-[160px] border-2 border-dashed border-border-default rounded-lg flex flex-col items-center justify-center text-text-muted hover:bg-background-subtle hover:border-primary transition-colors duration-300 relative overflow-hidden group"
-    >
-        <div className="absolute -top-8 -right-8 w-24 h-24 bg-accent/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-        <SparklesIcon className="w-10 h-10 mb-2 text-accent" />
-        <span className="font-semibold z-10">Generar con IA</span>
-    </button>
-);
 
 const TemplateCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
     <button
@@ -127,16 +76,16 @@ const TeamBoardsScreen: React.FC<TeamBoardsScreenProps> = ({
   users,
   currentUser,
   onSelectBoard,
-  onCreateBoard,
-  onOpenAIGenerator,
   onOpenTemplateSelector,
   onRequestDeleteBoard,
   onUpdateTeam,
   onDeleteTeam,
   currentUserRole,
   logActivity,
-  onCreateUser
+  onCreateUser,
+  onSendMessage,
 }) => {
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'boards' | 'chat'>('dashboard');
     const [isTeamManagementOpen, setIsTeamManagementOpen] = useState(false);
     const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
     
@@ -158,9 +107,87 @@ const TeamBoardsScreen: React.FC<TeamBoardsScreenProps> = ({
         });
     }, [team.boards]);
 
+    const TabButton: React.FC<{
+        label: string;
+        view: 'dashboard' | 'boards' | 'chat';
+        icon: React.ReactNode;
+        count?: number;
+    }> = ({ label, view, icon, count }) => (
+        <button
+            onClick={() => setActiveTab(view)}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                activeTab === view
+                ? 'bg-primary-light text-primary-text'
+                : 'text-text-muted hover:bg-background-subtle hover:text-text-default'
+            }`}
+        >
+            {icon}
+            <span className="hidden sm:inline">{label}</span>
+            {count !== undefined && count > 0 && (
+                <span className="ml-1 text-xs bg-danger text-white rounded-full px-1.5 py-0.5">{count}</span>
+            )}
+        </button>
+    );
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'dashboard':
+                return (
+                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                        <div className="lg:col-span-2">
+                            <TeamDashboard team={team} users={users} />
+                        </div>
+                         <div className="lg:col-span-1">
+                            <MemberList team={team} users={users} />
+                        </div>
+                    </div>
+                );
+            case 'chat':
+                return (
+                    <div className="mt-6 mx-auto" style={{ height: 'calc(100vh - 320px)', maxWidth: '1024px' }}>
+                        <TeamChatView
+                            team={team}
+                            currentUser={currentUser}
+                            users={users}
+                            onSendMessage={(message) => onSendMessage(team.id, message)}
+                        />
+                    </div>
+                );
+            case 'boards':
+            default:
+                return (
+                    <>
+                        <h2 className="text-2xl font-bold text-text-default mt-8 mb-4">Tableros del Proyecto</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-6">
+                            {team.boards.map(board => {
+                                const metrics = boardMetrics.find(m => m.boardId === board.id)!;
+                                return (
+                                    <div key={board.id} className="aspect-[4/3]">
+                                         <BoardCard
+                                            board={board}
+                                            progress={metrics.progress}
+                                            totalTasks={metrics.totalTasks}
+                                            overdueTasks={metrics.overdueTasks}
+                                            assignedMembers={metrics.assignedMembers}
+                                            onSelect={() => onSelectBoard(board.id)}
+                                            onRequestDelete={onRequestDeleteBoard}
+                                            canDelete={currentUserRole === UserRole.Admin}
+                                         />
+                                    </div>
+                                );
+                            })}
+                             <div className="aspect-[4/3]">
+                                <TemplateCard onOpen={onOpenTemplateSelector} />
+                            </div>
+                        </div>
+                    </>
+                );
+        }
+    };
+
     return (
     <>
-        <main className="flex-grow p-4 sm:p-8 bg-background-default">
+        <div className="p-4 sm:p-8">
             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                  <div>
                     <p className="text-text-muted mt-1">Visión general del equipo y sus proyectos.</p>
@@ -184,45 +211,17 @@ const TeamBoardsScreen: React.FC<TeamBoardsScreenProps> = ({
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    <TeamDashboard team={team} users={users} />
-                </div>
-                 <div className="lg:col-span-1">
-                    <MemberList team={team} users={users} />
-                </div>
+             <div className="border-b border-border-default">
+                <nav className="flex items-center gap-2 sm:gap-4">
+                    <TabButton label="Dashboard" view="dashboard" icon={<ChartBarIcon className="w-5 h-5"/>} />
+                    <TabButton label="Tableros" view="boards" icon={<ClipboardListIcon className="w-5 h-5"/>} />
+                    <TabButton label="Discusión" view="chat" icon={<ChatBubbleLeftRightIcon className="w-5 h-5"/>} />
+                </nav>
             </div>
             
-            <h2 className="text-2xl font-bold text-text-default mt-8 mb-4">Tableros del Proyecto</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-6">
-                {team.boards.map(board => {
-                    const metrics = boardMetrics.find(m => m.boardId === board.id)!;
-                    return (
-                        <div key={board.id} className="aspect-[4/3]">
-                             <BoardCard
-                                board={board}
-                                progress={metrics.progress}
-                                totalTasks={metrics.totalTasks}
-                                overdueTasks={metrics.overdueTasks}
-                                assignedMembers={metrics.assignedMembers}
-                                onSelect={() => onSelectBoard(board.id)}
-                                onRequestDelete={onRequestDeleteBoard}
-                                canDelete={currentUserRole === UserRole.Admin}
-                             />
-                        </div>
-                    );
-                })}
-                 <div className="aspect-[4/3]">
-                    <CreateBoardCard onCreateBoard={onCreateBoard} />
-                </div>
-                 <div className="aspect-[4/3]">
-                    <AIGenerateCard onOpen={onOpenAIGenerator} />
-                </div>
-                 <div className="aspect-[4/3]">
-                    <TemplateCard onOpen={onOpenTemplateSelector} />
-                </div>
-            </div>
-        </main>
+            {renderContent()}
+
+        </div>
 
         {isTeamManagementOpen && (
             <TeamManagementModal

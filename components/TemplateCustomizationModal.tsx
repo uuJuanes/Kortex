@@ -1,50 +1,85 @@
 
-import React, { useState, useCallback } from 'react';
+
+
+import React, { useState, useCallback, useEffect } from 'react';
 import { BoardTemplate } from '../types';
 import { AIGeneratedBoard } from '../App';
 import { generateBoard } from '../services/geminiService';
 import { XIcon } from './icons/XIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
-import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
-
 
 interface TemplateCustomizationModalProps {
   template: BoardTemplate;
   onClose: () => void;
-  onCreateBlank: (template: BoardTemplate) => void;
-  onGenerateWithAI: (board: AIGeneratedBoard) => void;
+  onGenerate: (board: AIGeneratedBoard) => void;
 }
 
-const TemplateCustomizationModal: React.FC<TemplateCustomizationModalProps> = ({ template, onClose, onCreateBlank, onGenerateWithAI }) => {
+const TemplateCustomizationModal: React.FC<TemplateCustomizationModalProps> = ({ template, onClose, onGenerate }) => {
   const [projectDescription, setProjectDescription] = useState('');
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    // Initialize state for variables if they exist
+    if (template.variables) {
+      const initialValues: Record<string, string> = {};
+      template.variables.forEach(v => {
+        initialValues[v.key] = '';
+      });
+      setVariableValues(initialValues);
+    }
+  }, [template]);
+
+  const handleVariableChange = (key: string, value: string) => {
+    setVariableValues(prev => ({ ...prev, [key]: value }));
+  };
+  
+  const canGenerate = () => {
+      if (template.variables) {
+          return template.variables.every(v => (variableValues[v.key] || '').trim() !== '');
+      }
+      return projectDescription.trim() !== '';
+  }
+
   const handleGenerate = useCallback(async () => {
-    if (!projectDescription.trim()) {
-      setError('Por favor, describe tu proyecto.');
+    if (!canGenerate()) {
+      setError('Por favor, completa todos los campos.');
       return;
     }
+
+    let descriptionForApi: string;
+    if (template.variables) {
+        descriptionForApi = template.variables.map(v => 
+            `${v.label}: ${variableValues[v.key] || ''}`
+        ).join('\n');
+    } else {
+        descriptionForApi = projectDescription;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const generatedBoard = await generateBoard(projectDescription, template);
-      onGenerateWithAI(generatedBoard);
+      const generatedBoard = await generateBoard(descriptionForApi, template);
+      onGenerate(generatedBoard);
     } catch (err) {
       setError('Error al generar el tablero. Por favor, revisa tu clave de API e inténtalo de nuevo.');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  }, [projectDescription, template, onGenerateWithAI]);
+  }, [projectDescription, template, onGenerate, variableValues]);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-background-card rounded-xl shadow-lg w-full max-w-2xl mx-4 border border-border-default">
+      <div className="bg-background-card rounded-xl shadow-lg w-full max-w-lg mx-4 border border-border-default">
         <header className="p-4 border-b border-border-default flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-text-default">Personaliza tu Tablero</h2>
-            <p className="text-sm text-text-muted">Estás usando la plantilla: <span className="font-semibold">{template.name}</span></p>
+            <h2 className="text-xl font-bold text-text-default flex items-center">
+              <SparklesIcon className="w-6 h-6 mr-3 text-accent" />
+              Generar Tablero con IA
+            </h2>
+            <p className="text-sm text-text-muted mt-1">Usando la plantilla: <span className="font-semibold">{template.name}</span></p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full text-text-muted hover:bg-background-subtle">
             <XIcon className="w-6 h-6" />
@@ -52,59 +87,88 @@ const TemplateCustomizationModal: React.FC<TemplateCustomizationModalProps> = ({
         </header>
 
         <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                    onClick={() => onCreateBlank(template)}
-                    className="p-6 border-2 border-border-default rounded-lg text-left hover:border-primary hover:bg-primary-light/30 transition-all duration-200 group"
-                >
-                    <DocumentDuplicateIcon className="w-8 h-8 mb-3 text-primary"/>
-                    <h3 className="text-lg font-semibold text-text-default">Crear tablero vacío</h3>
-                    <p className="text-sm text-text-muted mt-1">Empieza con la estructura de la plantilla, pero sin las tarjetas de ejemplo.</p>
-                </button>
-                <div className="p-6 border-2 border-border-default rounded-lg bg-background-subtle">
-                     <div className="flex items-start">
-                        <SparklesIcon className="w-8 h-8 mr-4 text-accent flex-shrink-0"/>
-                        <div>
-                            <h3 className="text-lg font-semibold text-text-default">Generar con IA</h3>
-                            <p className="text-sm text-text-muted mt-1">Describe tu proyecto y la IA lo poblará con tareas relevantes.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          <p className="text-text-muted mb-4 text-sm">Describe tu proyecto, y la IA poblará la estructura de la plantilla con tareas, épicas e historias de usuario relevantes para que puedas empezar.</p>
           
-            <div className="mt-4 space-y-3">
-                 <textarea
-                    value={projectDescription}
-                    onChange={(e) => setProjectDescription(e.target.value)}
-                    placeholder="Ej: 'Una aplicación para gestionar las tareas y gastos compartidos en un hogar, con registro de usuarios y un dashboard principal.'"
-                    className="w-full bg-background-subtle border border-border-default rounded-lg p-3 text-text-default focus:ring-2 focus:ring-primary focus:border-primary transition"
-                    rows={3}
-                    disabled={isLoading}
+          <div className="space-y-4">
+            {template.variables ? (
+              template.variables.map(variable => (
+                <div key={variable.key}>
+                  <label htmlFor={variable.key} className="block text-sm font-medium text-text-default mb-2">
+                    {variable.label}
+                  </label>
+                  {variable.type === 'text' ? (
+                    <input
+                      id={variable.key}
+                      type="text"
+                      value={variableValues[variable.key] || ''}
+                      onChange={(e) => handleVariableChange(variable.key, e.target.value)}
+                      placeholder={variable.placeholder}
+                      className="w-full bg-background-subtle border border-border-default rounded-lg p-3 text-text-default focus:ring-2 focus:ring-primary focus:border-primary transition"
+                      disabled={isLoading}
+                    />
+                  ) : (
+                    <textarea
+                      id={variable.key}
+                      value={variableValues[variable.key] || ''}
+                      onChange={(e) => handleVariableChange(variable.key, e.target.value)}
+                      placeholder={variable.placeholder}
+                      className="w-full bg-background-subtle border border-border-default rounded-lg p-3 text-text-default focus:ring-2 focus:ring-primary focus:border-primary transition"
+                      rows={3}
+                      disabled={isLoading}
+                    />
+                  )}
+                </div>
+              ))
+            ) : (
+              <div>
+                <label htmlFor="project-description" className="block text-sm font-medium text-text-default mb-2">
+                  Descripción del Proyecto
+                </label>
+                <textarea
+                  id="project-description"
+                  value={projectDescription}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  placeholder="Ej: 'Una aplicación para gestionar las tareas y gastos compartidos en un hogar...'"
+                  className="w-full bg-background-subtle border border-border-default rounded-lg p-3 text-text-default focus:ring-2 focus:ring-primary focus:border-primary transition"
+                  rows={4}
+                  disabled={isLoading}
+                  autoFocus
                 />
-                {error && <p className="text-danger text-sm">{error}</p>}
-                <button
-                    onClick={handleGenerate}
-                    className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center disabled:bg-border-default disabled:cursor-not-allowed"
-                    disabled={isLoading || !projectDescription.trim()}
-                >
-                    {isLoading ? (
-                    <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Generando...
-                    </>
-                    ) : (
-                    <>
-                        <SparklesIcon className="w-5 h-5 mr-2" />
-                        Generar Tablero
-                    </>
-                    )}
-                </button>
-            </div>
-
+              </div>
+            )}
+          </div>
+          {error && <p className="text-danger text-sm mt-2">{error}</p>}
         </div>
+
+        <footer className="p-4 bg-background-subtle border-t border-border-default flex justify-end space-x-3 rounded-b-xl">
+          <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-semibold text-text-default bg-background-card border border-border-default rounded-lg hover:bg-border-default transition-colors"
+              disabled={isLoading}
+          >
+              Cancelar
+          </button>
+          <button
+              onClick={handleGenerate}
+              className="px-4 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center disabled:bg-border-default disabled:cursor-not-allowed"
+              disabled={isLoading || !canGenerate()}
+          >
+              {isLoading ? (
+              <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generando...
+              </>
+              ) : (
+              <>
+                  <SparklesIcon className="w-5 h-5 mr-2" />
+                  Generar Tablero
+              </>
+              )}
+          </button>
+        </footer>
       </div>
     </div>
   );

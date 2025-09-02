@@ -270,5 +270,6 @@ export const initialTeamsData: Team[] = [
       },
     ],
     activityLog: [],
+    chatLog: [],
   },
 ];

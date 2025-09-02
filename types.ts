@@ -1,4 +1,6 @@
 
+
+
 declare var process: {
   env: {
     API_KEY?: string;
@@ -12,7 +14,7 @@ export interface Label {
 }
 
 export interface User {
-  id: string;
+  id:string;
   name: string;
   avatar: string;
   profileSummary: string;
@@ -41,6 +43,13 @@ export interface Activity {
   timestamp: string; // ISO 8601 string
 }
 
+export interface TeamChatMessage {
+  id: string;
+  userId: string;
+  text: string;
+  timestamp: string; // ISO 8601 string
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -49,6 +58,7 @@ export interface Team {
   members: TeamMember[];
   boards: Board[];
   activityLog?: Activity[];
+  chatLog?: TeamChatMessage[];
 }
 
 export interface ChecklistItem {
@@ -119,12 +129,28 @@ export interface TeamAnalysis {
   suggestions: string[];
 }
 
+export interface TeamReport {
+  summary: string;
+  positives: string[];
+  improvements: string[];
+  actionItems: string[];
+}
+
 
 export interface NewCardData {
     title: string;
     description?: string;
     labels: Label[];
     dueDate?: string;
+    members: User[];
+    attachments: Attachment[];
+}
+
+export interface TemplateVariable {
+  key: string;
+  label: string;
+  placeholder: string;
+  type: 'text' | 'textarea';
 }
 
 export interface BoardTemplate {
@@ -133,6 +159,7 @@ export interface BoardTemplate {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   category: 'Software' | 'Product' | 'Sales' | 'Marketing' | 'HR' | 'Operations' | 'Personal';
+  variables?: TemplateVariable[];
   board: {
     title: string;
     lists: {

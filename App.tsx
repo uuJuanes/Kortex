@@ -1,24 +1,31 @@
 
+
+
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Board from './components/Board';
 import { INITIAL_USERS, initialTeamsData, LABELS } from './constants';
-import { Board as BoardType, List, Card, User, Team, UserRole, TeamPrivacy, Activity, BoardTemplate } from './types';
-import GenerateBoardModal from './components/GenerateBoardModal';
+import { Board as BoardType, List, Card, User, Team, UserRole, TeamPrivacy, Activity, BoardTemplate, TeamChatMessage } from './types';
 import WelcomeScreen from './components/WelcomeScreen';
 import ConfirmationModal from './components/ConfirmationModal';
-import { findBestUserForTask, generateBoard } from './services/geminiService';
+import { findBestUserForTask } from './services/geminiService';
 import { deleteFile } from './db';
-import TeamBoardsScreen from './components/BoardSelectionScreen';
+import TeamBoardsScreen from './components/TeamBoardsScreen';
 import UserSwitcher from './components/UserSwitcher';
 import AIInsightsModal from './components/AIInsightsModal';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import UserSelectionScreen from './components/UserSelectionScreen';
 import TeamsView from './components/TeamSelectionScreen';
-import { KortexLogo } from './components/icons/KortexLogo';
 import TemplateSelectionModal from './components/TemplateSelectionModal';
 import TemplateCustomizationModal from './components/TemplateCustomizationModal';
 import { ChatBubbleLeftRightIcon } from './components/icons/ChatBubbleLeftRightIcon';
 import ChatWindow from './components/Chat/ChatWindow';
+import Sidebar from './components/Sidebar';
+import MyWorkDashboard from './components/MyWorkDashboard';
+import CardDetailModal from './components/CardDetailModal';
+import { MenuIcon } from './components/icons/MenuIcon';
+import MetricsView from './components/MetricsView';
+import CommandPalette from './components/CommandPalette';
 
 
 // This interface now describes the rich, professional board structure we expect from the AI.
@@ -46,6 +53,8 @@ export interface AIGeneratedBoard {
   title: string;
   lists: AIGeneratedList[];
 }
+
+export type AppView = 'my-work' | 'teams' | 'teamDetail' | 'boardView' | 'metrics';
 
 
 const App: React.FC = () => {
@@ -89,18 +98,31 @@ const App: React.FC = () => {
   
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
-  const [isGenerateBoardModalOpen, setIsGenerateBoardModalOpen] = useState(false);
   const [boardToDeleteId, setBoardToDeleteId] = useState<string | null>(null);
   const [isAIInsightsModalOpen, setIsAIInsightsModalOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isTemplateCustomizationModalOpen, setIsTemplateCustomizationModalOpen] = useState(false);
-  const [selectedTemplateForCustomization, setSelectedTemplateForCustomization] = useState<BoardTemplate | null>(null);
+  const [templateToCustomize, setTemplateToCustomize] = useState<BoardTemplate | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [editingCardContext, setEditingCardContext] = useState<{ card: Card; listId: string; listTitle: string; board: BoardType; team: Team; } | null>(null);
 
   
   // New state management for views
   const [view, setView] = useState<'welcome' | 'userSelection' | 'app'>('welcome');
-  const [appView, setAppView] = useState<'teams' | 'teamDetail' | 'boardView'>('teams');
+  const [appView, setAppView] = useState<AppView>('my-work');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+            event.preventDefault();
+            setIsCommandPaletteOpen(prev => !prev);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
 
   const logActivity = useCallback((teamId: string, userId: string, action: string) => {
@@ -120,6 +142,26 @@ const App: React.FC = () => {
       });
     });
   }, []);
+  
+  const handleSendMessageToTeam = useCallback((teamId: string, text: string) => {
+    if (!currentUser) return;
+
+    setTeams(prevTeams => {
+      return prevTeams.map(team => {
+        if (team.id === teamId) {
+          const newMessage: TeamChatMessage = {
+            id: `msg-team-${Date.now()}`,
+            userId: currentUser.id,
+            text,
+            timestamp: new Date().toISOString(),
+          };
+          const updatedChatLog = [...(team.chatLog || []), newMessage];
+          return { ...team, chatLog: updatedChatLog };
+        }
+        return team;
+      });
+    });
+  }, [currentUser]);
 
   const handleStartApp = useCallback(() => {
     setView('userSelection');
@@ -128,7 +170,7 @@ const App: React.FC = () => {
   const handleSelectUser = useCallback((user: User) => {
     setCurrentUser(user);
     setView('app');
-    setAppView('teams');
+    setAppView('my-work');
   }, []);
   
   const handleSelectTeam = useCallback((teamId: string) => {
@@ -141,52 +183,26 @@ const App: React.FC = () => {
     setAppView('boardView');
   }, []);
 
-  const handleNavigateToTeams = useCallback(() => {
+  const handleNavigate = useCallback((view: AppView) => {
+    setAppView(view);
     setActiveTeamId(null);
     setActiveBoardId(null);
-    setAppView('teams');
   }, []);
   
-  const handleCreateBoard = useCallback((title: string) => {
+  const handleCreateBoardFromBlankTemplate = useCallback((template: BoardTemplate) => {
     if (!activeTeamId || !currentUser) return;
+    
+    const boardTitle = prompt("Introduce el título para tu nuevo tablero:", template.board.title);
+    if (!boardTitle) return; // User cancelled
 
     const newBoard: BoardType = {
-      id: `board-${Date.now()}`,
+      id: `board-blank-${Date.now()}`,
       teamId: activeTeamId,
-      title,
-      lists: [
-        { id: 'list-1', title: 'To Do', cards: [] },
-        { id: 'list-2', title: 'In Progress', cards: [] },
-        { id: 'list-3', title: 'Done', cards: [] },
-      ],
-    };
-
-    setTeams(prevTeams => prevTeams.map(team => 
-        team.id === activeTeamId 
-        ? { ...team, boards: [...team.boards, newBoard] } 
-        : team
-    ));
-    logActivity(activeTeamId, currentUser.id, `creó el tablero "${title}".`);
-    handleSelectBoard(newBoard.id);
-  }, [activeTeamId, handleSelectBoard, logActivity, currentUser]);
-  
-  const handleSelectTemplate = (template: BoardTemplate) => {
-    setSelectedTemplateForCustomization(template);
-    setIsTemplateModalOpen(false); // Close the selection modal
-    setIsTemplateCustomizationModalOpen(true); // Open the customization modal
-  };
-
-  const handleCreateBlankBoardFromTemplate = useCallback((template: BoardTemplate) => {
-    if (!activeTeamId || !currentUser) return;
-
-    const newBoard: BoardType = {
-      id: `board-tpl-blank-${Date.now()}`,
-      teamId: activeTeamId,
-      title: template.board.title,
+      title: boardTitle,
       lists: template.board.lists.map((list, listIndex) => ({
-        id: `list-tpl-blank-${Date.now()}-${listIndex}`,
+        id: `list-blank-${Date.now()}-${listIndex}`,
         title: list.title,
-        cards: [], // Create empty cards array
+        cards: [],
       })),
     };
 
@@ -195,11 +211,19 @@ const App: React.FC = () => {
         ? { ...team, boards: [...team.boards, newBoard] }
         : team
     ));
-    logActivity(activeTeamId, currentUser.id, `creó el tablero "${newBoard.title}" desde la plantilla (vacía) "${template.name}".`);
+    logActivity(activeTeamId, currentUser.id, `creó el tablero "${newBoard.title}" desde una plantilla en blanco.`);
     handleSelectBoard(newBoard.id);
-    setIsTemplateCustomizationModalOpen(false);
   }, [activeTeamId, currentUser, logActivity, handleSelectBoard]);
 
+  const handleSelectTemplate = (template: BoardTemplate) => {
+    setIsTemplateModalOpen(false);
+    if (template.id === 'template-blank') {
+        handleCreateBoardFromBlankTemplate(template);
+    } else {
+        setTemplateToCustomize(template);
+        setIsTemplateCustomizationModalOpen(true);
+    }
+  };
   
   const handleGenerateBoard = useCallback(async (generatedBoard: AIGeneratedBoard) => {
     if (!activeTeamId || !currentUser) return;
@@ -266,16 +290,34 @@ const App: React.FC = () => {
     logActivity(activeTeamId, currentUser.id, `generó el tablero "${generatedBoard.title}" usando IA.`);
     handleSelectBoard(newBoard.id);
     setIsTemplateCustomizationModalOpen(false);
+    setTemplateToCustomize(null);
   }, [activeTeamId, teams, users, handleSelectBoard, logActivity, currentUser]);
 
   const handleUpdateBoard = useCallback((updatedBoard: BoardType) => {
-    if (!activeTeamId) return;
+    if (!activeTeamId && !editingCardContext) return;
+    const teamIdToUpdate = activeTeamId || editingCardContext?.team.id;
+    if (!teamIdToUpdate) return;
+    
     setTeams(prevTeams => prevTeams.map(team => 
-        team.id === activeTeamId
+        team.id === teamIdToUpdate
         ? { ...team, boards: team.boards.map(b => b.id === updatedBoard.id ? updatedBoard : b) }
         : team
     ));
-  }, [activeTeamId]);
+  }, [activeTeamId, editingCardContext]);
+  
+  const handleUpdateCardInBoard = (updatedCard: Card) => {
+    const context = editingCardContext;
+    if(!context) return;
+    
+    const updatedLists = context.board.lists.map(list => ({
+      ...list,
+      cards: list.cards.map(card => card.id === updatedCard.id ? updatedCard : card)
+    }));
+    
+    handleUpdateBoard({ ...context.board, lists: updatedLists });
+    setEditingCardContext(prev => (prev ? { ...prev, card: updatedCard } : null));
+  };
+
 
   const handleRequestDeleteBoard = useCallback((boardId: string) => {
     setBoardToDeleteId(boardId);
@@ -335,6 +377,7 @@ const App: React.FC = () => {
       members: [{ userId: currentUser.id, role: UserRole.Admin }],
       boards: [],
       activityLog: [],
+      chatLog: [],
     };
     setTeams(prev => [...prev, newTeam]);
     handleSelectTeam(newTeam.id);
@@ -347,9 +390,9 @@ const App: React.FC = () => {
   const handleDeleteTeam = useCallback((teamId: string) => {
     setTeams(prev => prev.filter(t => t.id !== teamId));
     if (activeTeamId === teamId) {
-      handleNavigateToTeams();
+      handleNavigate('teams');
     }
-  }, [activeTeamId, handleNavigateToTeams]);
+  }, [activeTeamId, handleNavigate]);
 
   const handleCreateUser = useCallback((name: string, profileSummary: string): User => {
     const newUser: User = {
@@ -361,6 +404,17 @@ const App: React.FC = () => {
     setUsers(prevUsers => [...prevUsers, newUser]);
     return newUser;
   }, []);
+
+  const handleSelectCardFromDashboard = useCallback((card: Card, board: BoardType, team: Team) => {
+    const list = board.lists.find(l => l.cards.some(c => c.id === card.id));
+    if (list) {
+        setEditingCardContext({ card, listId: list.id, listTitle: list.title, board, team });
+    }
+  }, []);
+
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed(prev => !prev);
+  };
 
 
   const userTeams = useMemo(() => {
@@ -382,6 +436,18 @@ const App: React.FC = () => {
 
   const renderAppView = () => {
     switch(appView) {
+      case 'my-work':
+        return (
+            <MyWorkDashboard
+                teams={userTeams}
+                currentUser={currentUser}
+                onCardSelect={handleSelectCardFromDashboard}
+                onNavigateToBoard={(teamId, boardId) => {
+                    setActiveTeamId(teamId);
+                    handleSelectBoard(boardId);
+                }}
+            />
+        );
       case 'teams':
         return (
           <TeamsView
@@ -390,9 +456,17 @@ const App: React.FC = () => {
             onCreateTeam={handleCreateTeam}
           />
         );
+      case 'metrics':
+        return (
+          <MetricsView
+            teams={userTeams}
+            users={users}
+            currentUser={currentUser}
+          />
+        );
       case 'teamDetail':
         if (!activeTeam) {
-            handleNavigateToTeams();
+            handleNavigate('teams');
             return null;
         }
         return (
@@ -400,8 +474,6 @@ const App: React.FC = () => {
             team={activeTeam}
             users={users}
             onSelectBoard={handleSelectBoard}
-            onCreateBoard={handleCreateBoard}
-            onOpenAIGenerator={() => setIsGenerateBoardModalOpen(true)}
             onOpenTemplateSelector={() => setIsTemplateModalOpen(true)}
             onRequestDeleteBoard={handleRequestDeleteBoard}
             onUpdateTeam={handleUpdateTeam}
@@ -410,11 +482,12 @@ const App: React.FC = () => {
             currentUserRole={activeTeam.members.find(m => m.userId === currentUser.id)?.role}
             logActivity={(action: string) => logActivity(activeTeam.id, currentUser.id, action)}
             onCreateUser={handleCreateUser}
+            onSendMessage={handleSendMessageToTeam}
           />
         );
       case 'boardView':
         if (!activeTeam || !activeBoard) {
-            handleNavigateToTeams();
+            handleNavigate('teams');
             return null;
         }
         const teamMembers = activeTeam.members
@@ -423,17 +496,15 @@ const App: React.FC = () => {
         const currentUserRole = activeTeam.members.find(m => m.userId === currentUser.id)?.role;
             
         return (
-          <main className="flex-grow overflow-x-auto bg-background-subtle">
-            <Board 
-              key={activeBoard.id} 
-              board={activeBoard} 
-              onBoardUpdate={handleUpdateBoard}
-              users={teamMembers}
-              currentUser={currentUser}
-              currentUserRole={currentUserRole}
-              logActivity={(action: string) => logActivity(activeTeam.id, currentUser.id, action)}
-            />
-          </main>
+          <Board 
+            key={activeBoard.id} 
+            board={activeBoard} 
+            onBoardUpdate={handleUpdateBoard}
+            users={teamMembers}
+            currentUser={currentUser}
+            currentUserRole={currentUserRole}
+            logActivity={(action: string) => logActivity(activeTeam.id, currentUser.id, action)}
+          />
         );
       default:
         return <TeamsView teams={userTeams} onSelectTeam={handleSelectTeam} onCreateTeam={handleCreateTeam}/>;
@@ -442,10 +513,14 @@ const App: React.FC = () => {
 
   const getHeaderTitle = () => {
     switch(appView) {
+        case 'my-work':
+            return 'Mi Espacio de Trabajo';
         case 'teams':
-            return 'Mis Equipos de Trabajo';
+            return 'Mis Equipos';
+        case 'metrics':
+            return 'Métricas y Reportes';
         case 'teamDetail':
-            return activeTeam ? `Equipo: ${activeTeam.name}` : 'Cargando...';
+            return activeTeam ? `${activeTeam.name}` : 'Cargando...';
         case 'boardView':
             return activeBoard ? activeBoard.title : 'Cargando...';
         default:
@@ -456,7 +531,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen text-text-default font-sans flex flex-col animate-fadeIn bg-background-default">
+      <div className="h-screen text-text-default font-sans flex animate-fadeIn bg-background-default">
          <style>
           {`
             @keyframes fadeIn {
@@ -468,38 +543,58 @@ const App: React.FC = () => {
             }
           `}
         </style>
+        
+        <Sidebar 
+            onNavigate={handleNavigate} 
+            activeView={appView} 
+            isCollapsed={isSidebarCollapsed}
+            onToggle={handleToggleSidebar}
+        />
 
-        <header className="p-3 bg-background-default border-b border-border-default shadow-subtle flex items-center justify-between flex-shrink-0 z-10">
-          <div className="flex items-center gap-4">
-            <KortexLogo />
-            <div className="w-px h-6 bg-border-default hidden md:block"></div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-text-default">{getHeaderTitle()}</h1>
-              {appView === 'boardView' && (
-                <button
-                  onClick={() => setIsAIInsightsModalOpen(true)}
-                  className="ml-2 flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-light rounded-lg hover:bg-opacity-80 transition-colors shadow-sm"
-                  title="Obtener análisis y sugerencias de la IA"
-                >
-                  <SparklesIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Análisis IA</span>
+        <div className="flex-1 flex flex-col overflow-hidden">
+             <header className="p-3 bg-background-default/80 backdrop-blur-sm border-b border-border-default shadow-subtle flex items-center justify-between flex-shrink-0 z-10">
+              <div className="flex items-center gap-4">
+                {isSidebarCollapsed && (
+                    <button
+                        onClick={handleToggleSidebar}
+                        className="p-2 rounded-full text-text-muted hover:bg-background-subtle"
+                        aria-label="Open sidebar"
+                    >
+                        <MenuIcon className="w-6 h-6" />
+                    </button>
+                )}
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-text-default">{getHeaderTitle()}</h1>
+                  {appView === 'boardView' && (
+                    <button
+                      onClick={() => setIsAIInsightsModalOpen(true)}
+                      className="ml-2 flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-accent-text bg-accent-light rounded-lg hover:bg-opacity-80 transition-colors shadow-sm"
+                      title="Obtener análisis y sugerencias de la IA"
+                    >
+                      <SparklesIcon className="w-4 h-4" />
+                      <span className="hidden sm:inline">Análisis IA</span>
+                    </button>
+                  )}
+                  {appView === 'teamDetail' && (
+                    <button onClick={() => handleNavigate('teams')} className="text-sm text-text-muted hover:text-text-default">(Volver a Equipos)</button>
+                  )}
+                  {appView === 'boardView' && activeTeamId &&(
+                    <button onClick={() => { setActiveBoardId(null); setAppView('teamDetail')}} className="text-sm text-text-muted hover:text-text-default">(Volver a {activeTeam?.name})</button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                 <button onClick={() => setIsCommandPaletteOpen(true)} className="hidden sm:flex items-center gap-2 text-sm text-text-muted border border-border-default rounded-lg px-3 py-1.5 hover:bg-background-subtle">
+                    Buscar...
+                    <kbd className="font-sans font-semibold"><span className="text-xs">⌘</span>K</kbd>
                 </button>
-              )}
-              {appView === 'teamDetail' && (
-                <button onClick={handleNavigateToTeams} className="text-sm text-text-muted hover:text-text-default">(Volver a Equipos)</button>
-              )}
-              {appView === 'boardView' && activeTeamId &&(
-                <button onClick={() => { setActiveBoardId(null); setAppView('teamDetail')}} className="text-sm text-text-muted hover:text-text-default">(Volver a {activeTeam?.name})</button>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <UserSwitcher users={users} currentUser={currentUser} onUserChange={setCurrentUser} />
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto">
-          {renderAppView()}
+                <UserSwitcher users={users} currentUser={currentUser} onUserChange={setCurrentUser} />
+              </div>
+            </header>
+            
+            <main className="flex-1 overflow-y-auto bg-background-subtle">
+                 {renderAppView()}
+            </main>
         </div>
       </div>
       
@@ -519,25 +614,35 @@ const App: React.FC = () => {
           onClose={() => setIsChatOpen(false)}
         />
       )}
-
-      {isGenerateBoardModalOpen && (
-        <GenerateBoardModal
-          onClose={() => setIsGenerateBoardModalOpen(false)}
-          onBoardGenerated={handleGenerateBoard}
+       {isCommandPaletteOpen && currentUser && (
+        <CommandPalette
+            teams={userTeams}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onNavigate={(view) => {
+                handleNavigate(view);
+                setIsCommandPaletteOpen(false);
+            }}
+            onSelectTeam={(teamId) => {
+                handleSelectTeam(teamId);
+                setIsCommandPaletteOpen(false);
+            }}
         />
-      )}
+       )}
+
       {isTemplateModalOpen && (
         <TemplateSelectionModal
           onClose={() => setIsTemplateModalOpen(false)}
           onTemplateSelected={handleSelectTemplate}
         />
       )}
-      {isTemplateCustomizationModalOpen && selectedTemplateForCustomization && (
+      {isTemplateCustomizationModalOpen && templateToCustomize && (
         <TemplateCustomizationModal
-          template={selectedTemplateForCustomization}
-          onClose={() => setIsTemplateCustomizationModalOpen(false)}
-          onCreateBlank={handleCreateBlankBoardFromTemplate}
-          onGenerateWithAI={handleGenerateBoard}
+          template={templateToCustomize}
+          onClose={() => {
+            setIsTemplateCustomizationModalOpen(false);
+            setTemplateToCustomize(null);
+          }}
+          onGenerate={handleGenerateBoard}
         />
       )}
        {boardToDelete && (
@@ -555,6 +660,26 @@ const App: React.FC = () => {
             users={activeTeam.members.map(m => users.find(u => u.id === m.userId)).filter(Boolean) as User[]}
             onClose={() => setIsAIInsightsModalOpen(false)}
           />
+      )}
+      {editingCardContext && (
+         <CardDetailModal
+            card={editingCardContext.card}
+            listTitle={editingCardContext.listTitle}
+            users={editingCardContext.team.members.map(m => users.find(u => u.id === m.userId)).filter(Boolean) as User[]}
+            currentUser={currentUser}
+            currentUserRole={editingCardContext.team.members.find(m => m.userId === currentUser.id)?.role}
+            onClose={() => setEditingCardContext(null)}
+            onUpdateCard={handleUpdateCardInBoard}
+            onDeleteCard={async (cardId) => {
+                // This is a simplified delete from dashboard, it doesn't use the full board delete flow
+                const updatedBoard = {
+                    ...editingCardContext.board,
+                    lists: editingCardContext.board.lists.map(l => ({...l, cards: l.cards.filter(c => c.id !== cardId)}))
+                };
+                handleUpdateBoard(updatedBoard);
+                setEditingCardContext(null);
+            }}
+        />
       )}
     </>
   );

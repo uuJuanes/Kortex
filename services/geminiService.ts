@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Card, User, Board as BoardType, BoardAnalysis, Team, TeamAnalysis, TaskGenerationContext, BoardTemplate } from "../types";
+import { Card, User, Board as BoardType, BoardAnalysis, Team, TeamAnalysis, TaskGenerationContext, BoardTemplate, Label, TeamReport, Comment } from "../types";
 import { AIGeneratedBoard } from "../App";
 
 const API_KEY = process.env.API_KEY;
@@ -39,16 +40,24 @@ export const generateTasks = async (goal: string, context: { boardTitle: string;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Actúa como ${persona}
-      
-      **Contexto del Proyecto:**
-      - Nombre del Tablero: "${context.boardTitle}"
-      - Columnas del Tablero: ${listTitles}
-      - Columna Actual para Tareas: "${context.listTitle}"
-      
-      **Objetivo del Usuario:** "${goal}"
+      contents: `
+        **ROL:** Eres ${persona}. Tu especialidad es descomponer objetivos grandes en tareas pequeñas y manejables.
 
-      Basado en el objetivo y el contexto, genera una lista de 3 a 5 tareas accionables en español. Para cada tarea, proporciona un título conciso y una breve descripción de una oración. Las tareas deben ser apropiadas para la columna "${context.listTitle}".`,
+        **CONTEXTO DEL PROYECTO:**
+        - **Nombre del Tablero:** "${context.boardTitle}"
+        - **Flujo de Trabajo (Columnas):** ${listTitles}
+        - **Etapa Actual para Nuevas Tareas:** "${context.listTitle}"
+        
+        **OBJETIVO A DESGLOSAR:**
+        "${goal}"
+
+        **INSTRUCCIONES:**
+        1. Analiza el **OBJETIVO** dentro del **CONTEXTO** del proyecto.
+        2. Genera una lista de 3 a 5 tareas específicas y accionables que representen los siguientes pasos lógicos para alcanzar el objetivo.
+        3. Las tareas deben ser apropiadas para ser añadidas a la columna "${context.listTitle}".
+        4. Para cada tarea, proporciona un \`title\` (título claro y directo) y una \`description\` (una frase que explique el "qué" o el "porqué" de la tarea).
+        5. La respuesta DEBE estar en español.
+      `,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -94,89 +103,68 @@ export const generateTasks = async (goal: string, context: { boardTitle: string;
 };
 
 
-export const generateBoard = async (projectDescription: string, template?: BoardTemplate): Promise<AIGeneratedBoard> => {
-  let mainPrompt: string;
+export const generateBoard = async (projectDescription: string, template: BoardTemplate): Promise<AIGeneratedBoard> => {
+  let persona: string;
+  let taskTypeInstructions: string;
 
-  if (template) {
-    let persona = "un experto gestor de proyectos.";
-    switch (template.category) {
-        case 'Software':
-            persona = "un Ingeniero de Software Principal (Principal Software Engineer) con experiencia en Agile.";
-            break;
-        case 'Marketing':
-            persona = "un Director de Marketing (Marketing Director) especializado en estrategias de contenido digital.";
-            break;
-        case 'Sales':
-            persona = "un experimentado Gerente de Ventas (Sales Manager) enfocado en optimizar el pipeline comercial.";
-            break;
-        case 'HR':
-            persona = "un especialista en Recursos Humanos (HR Specialist) encargado de la incorporación y seguimiento de personal.";
-            break;
-        case 'Product':
-            persona = "un Gerente de Producto (Product Manager) experto en la creación de roadmaps.";
-            break;
-        case 'Operations':
-            persona = "un Director de Operaciones (COO) enfocado en la eficiencia y alineación estratégica.";
-            break;
-        case 'Personal':
-            persona = "un coach de productividad personal experto en la metodología Kanban.";
-            break;
-    }
-    const listTitles = template.board.lists.map(l => `"${l.title}"`).join(', ');
-    const listStructurePrompt = `Usa EXACTAMENTE la siguiente estructura de listas (columnas) para el tablero: ${listTitles}. Llena las primeras listas con tareas relevantes y deja las listas de etapas finales (como 'Hecho' o 'Lanzado') vacías.`;
-
-    mainPrompt = `Actúa como ${persona}. Tu misión es tomar la descripción de un proyecto de un usuario y poblar un tablero Kanban predefinido con tareas relevantes, épicas e historias de usuario.
-
-    **Contexto del Proyecto:**
-    - **Tipo de Plantilla:** ${template.name}
-    - **Descripción del Usuario:** "${projectDescription}"
-
-    **Instrucciones para la Generación del Tablero:**
-    1.  **Título del Tablero:** Genera un título para el tablero que refleje la descripción del usuario.
-    2.  **Estructura de Listas:** ${listStructurePrompt}
-    3.  **Tarjetas (Tareas):**
-        - Basado en la descripción, crea una lista inicial de tareas, épicas e historias de usuario.
-        - Distribuye estas tarjetas en las primeras columnas del tablero de manera lógica.
-        - Las tarjetas deben tener un título claro y una breve descripción.
-        - Asigna etiquetas relevantes para cada tarjeta, incluyendo opcionalmente checklists para tareas complejas.
-    
-    La salida DEBE adherirse estrictamente al esquema JSON proporcionado y todo el contenido textual debe estar en español.`
-
-  } else {
-    mainPrompt = `Actúa como un experto Project Manager y un sistema de IA para la gestión de proyectos. Tu misión es generar un tablero de proyecto Trello/Kanban completo, estructurado y realista en español.
-
-    **Instrucción de Bienvenida:** Como primera tarjeta en la primera columna, SIEMPRE crea una tarjeta de bienvenida que explique el significado de los prefijos de las tareas.
-
-    **Contexto del Proyecto:**
-    - **Descripción del Usuario:** "${projectDescription}"
-
-    **Instrucciones para la Generación del Tablero:**
-
-    1.  **Tarjeta de Bienvenida:** La primera tarjeta de la primera lista DEBE ser una guía para el usuario.
-        -   **Título:** "¡Bienvenido a tu Nuevo Tablero! ✨"
-        -   **Descripción:** "Aquí tienes una guía rápida de los prefijos que usamos para organizar las tareas:
-            -   \`EPIC\`: Una gran funcionalidad que agrupa varias historias de usuario.
-            -   \`HU\`: Historia de Usuario. Una funcionalidad desde la perspectiva del usuario final.
-            -   \`DSN\`: Tarea de Diseño (UI/UX).
-            -   \`TSK-ARC\`: Tarea de Arquitectura de Software.
-            -   \`TSK-BE\`: Tarea de Backend.
-            -   \`TSK-FE\`: Tarea de Frontend.
-            -   \`TSK-QA\`: Tarea de Quality Assurance (Pruebas).
-            -   \`TSK-PM\`: Tarea de Project Management.
-            -   \`BUG\`: Corrección de un error."
-        -   **Etiquetas:** Asigna una etiqueta como '📌 Guía'.
-
-    2.  **Listas (Columnas):**
-        - Genera una secuencia lógica de listas que representen un flujo de trabajo de desarrollo de software completo (ej: \`Product Backlog\`, \`Diseño (UI/UX)\`, \`Sprint Backlog\`, \`Por Hacer (Sprint)\`, \`En Progreso\`, \`QA\`, \`Hecho\`).
-        - Las listas avanzadas como \`En Progreso\`, \`QA\` y \`Hecho\` DEBEN estar INICIALMENTE VACÍAS.
-
-    3.  **Tarjetas (Tareas):**
-        - Utiliza los prefijos mencionados arriba en los títulos de las tarjetas para clarificar su naturaleza (ej: \`HU-01: Registro de usuarios\`, \`TSK-BE-01: Crear API de autenticación\`).
-        - Cada tarjeta debe tener: \`title\`, \`description\`, y \`labels\`.
-        - Puedes incluir opcionalmente: \`dueDate\` y \`checklist\`.
-
-    La salida DEBE adherirse estrictamente al esquema JSON proporcionado y todo el contenido textual debe estar en español.`;
+  // Define personas and task instructions based on template category
+  switch (template.category) {
+    case 'Software':
+      persona = "un Arquitecto de Soluciones experto en Metodologías Ágiles y Scrum.";
+      taskTypeInstructions = "Genera una mezcla de **Épicas** (grandes funcionalidades), **Historias de Usuario** (requerimientos desde la perspectiva del usuario, ej: 'HU-01: ...') y **Tareas Técnicas** (acciones específicas, ej: 'TSK-BE-01: ...'). En las descripciones, sugiere dependencias lógicas cuando sea apropiado (ej: 'Depende de TSK-XX-01').";
+      break;
+    case 'Marketing':
+      persona = "un Director de Marketing Estratégico especializado en campañas de contenido omnicanal.";
+      taskTypeInstructions = "Genera **Iniciativas de Marketing** y **Piezas de Contenido** como tarjetas. Incluye ideas para artículos de blog, campañas de redes sociales, videos o newsletters. Asegúrate de que las tareas iniciales se centren en la estrategia y la planificación.";
+      break;
+    case 'Sales':
+      persona = "un Vicepresidente de Ventas con amplia experiencia en la estructuración de pipelines comerciales B2B y B2C.";
+      taskTypeInstructions = "Genera **Oportunidades de Venta** o **Cuentas Clave** como tarjetas. Cada tarjeta debe representar un lead o un cliente potencial en una etapa temprana del embudo. Utiliza la descripción para añadir detalles clave como el valor estimado de la oportunidad.";
+      break;
+    case 'HR':
+      persona = "un Director de Recursos Humanos (CHRO) enfocado en crear experiencias de empleado excepcionales.";
+      taskTypeInstructions = "Genera **Hitos del Proceso de RRHH** como tarjetas. Por ejemplo, para un onboarding, crea tareas como 'Preparar equipo de trabajo', 'Coordinar sesión de bienvenida', etc. Las tareas deben ser claras y asignables.";
+      break;
+    case 'Product':
+      persona = "un Jefe de Producto (Head of Product) experto en la definición de roadmaps y la priorización de funcionalidades basada en el impacto.";
+      taskTypeInstructions = "Genera **Funcionalidades (Features)** y **Épicas** como tarjetas. Organízalas en las columnas de roadmap (ej: 'Próximo Q', 'Futuro') para dar una visión estratégica del producto. Usa las descripciones para explicar el valor de negocio de cada funcionalidad.";
+      break;
+    case 'Operations':
+      persona = "un Director de Operaciones (COO) obsesionado con la eficiencia de procesos y la alineación estratégica.";
+      taskTypeInstructions = "Genera **Proyectos Clave** o **Hitos Operativos** como tarjetas. Las tareas deben reflejar los pasos necesarios para alcanzar un objetivo operativo, como 'Optimizar proceso de facturación' o 'Implementar nuevo software interno'.";
+      break;
+    case 'Personal':
+    default:
+      persona = "un coach de productividad de clase mundial, experto en la metodología GTD (Getting Things Done).";
+      taskTypeInstructions = "Genera **Tareas Personales** y **Metas a Corto Plazo** como tarjetas. Desglosa el objetivo del usuario en pasos pequeños y manejables. Comienza por poblar la bandeja de entrada o la lista 'Por Hacer'.";
+      break;
   }
+  
+  const listTitles = template.board.lists.map(l => `"${l.title}"`).join(', ');
+  
+  const mainPrompt = `
+    **ROL:** Actúa como ${persona}. Tu misión es crear un plan de proyecto inicial estructurado en un tablero Kanban.
+
+    **PROYECTO DEL USUARIO:**
+    - **Tipo de Plan (Plantilla):** ${template.name}
+    - **Descripción:** "${projectDescription}"
+
+    **TAREA:**
+    1.  **Título del Tablero:** Genera un título conciso y descriptivo para el proyecto.
+    2.  **Estructura de Columnas:** Debes usar **exactamente** la siguiente estructura de columnas: ${listTitles}.
+    3.  **Contenido de las Tarjetas:**
+        - Basándote en tu rol, genera el contenido inicial del tablero. ${taskTypeInstructions}
+        - Crea entre 8 y 15 tarjetas en total.
+        - Distribuye las tarjetas en las primeras 2-3 columnas de forma lógica. Las columnas de etapas finales (como 'Hecho', 'Lanzado') deben permanecer vacías.
+        - Cada tarjeta debe tener un \`title\` claro y una \`description\` breve pero informativa.
+        - Asigna etiquetas (\`labels\`) relevantes y visualmente distintas para categorizar el trabajo.
+        - Para cada tarjeta, sugiere un \`assignedRole\` genérico que sería responsable de la tarea (ej. 'Frontend Developer', 'Marketing Specialist').
+        - Para tareas complejas, añade un \`checklist\` con 2-4 sub-ítems o criterios de aceptación.
+    
+    **REGLAS DE SALIDA:**
+    - El resultado debe ser un objeto JSON válido que se ajuste estrictamente al esquema proporcionado.
+    - Todo el contenido textual (títulos, descripciones, etc.) DEBE estar en **español**.
+  `;
   
   try {
     const response = await ai.models.generateContent({
@@ -230,6 +218,10 @@ export const generateBoard = async (projectDescription: string, template?: Board
                                 },
                                 required: ["text", "color"]
                               }
+                            },
+                            assignedRole: {
+                              type: Type.STRING,
+                              description: "Un rol sugerido para realizar esta tarea (ej. 'Desarrollador Backend', 'Diseñador UX/UI')."
                             },
                             dueDate: {
                               type: Type.STRING,
@@ -341,6 +333,63 @@ Basado en la especialización y experiencia descrita en los resúmenes de perfil
     throw new Error("Failed to assign user from Gemini API.");
   }
 };
+
+export const getTaskSuggestions = async (
+  task: { title: string; description?: string },
+  allLabels: Label[]
+): Promise<Label[]> => {
+  const labelDescriptions = allLabels.map(l => `"${l.text}"`).join(', ');
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Actúa como un experto gestor de proyectos. Analiza la siguiente tarea y sugiere las etiquetas más relevantes de la lista proporcionada.
+
+      **Tarea:**
+      - Título: "${task.title}"
+      - Descripción: "${task.description || 'Sin descripción'}"
+
+      **Etiquetas Disponibles:**
+      [${labelDescriptions}]
+
+      Basado en el título y la descripción, ¿cuáles de las etiquetas disponibles son las más adecuadas? Proporciona un máximo de 3 etiquetas.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            suggestedLabels: {
+              type: Type.ARRAY,
+              description: "Una lista de los nombres de las etiquetas sugeridas.",
+              items: {
+                type: Type.STRING
+              }
+            }
+          },
+          required: ["suggestedLabels"]
+        },
+      }
+    });
+
+    const jsonString = response.text.trim();
+    const parsedResponse: { suggestedLabels: string[] } = JSON.parse(jsonString);
+
+    if (!parsedResponse.suggestedLabels) {
+      return [];
+    }
+    
+    // Map string names back to Label objects
+    const suggestedLabels = parsedResponse.suggestedLabels
+      .map(suggestedText => allLabels.find(label => label.text.toLowerCase() === suggestedText.toLowerCase()))
+      .filter((l): l is Label => !!l);
+      
+    return suggestedLabels;
+  } catch (error) {
+    console.error("Error calling Gemini API for label suggestions:", error);
+    throw new Error("Failed to get label suggestions from Gemini API.");
+  }
+};
+
 
 export const analyzeBoard = async (board: BoardType, members: User[]): Promise<BoardAnalysis> => {
     // Simplify the board data for a cleaner prompt
@@ -522,5 +571,104 @@ La salida DEBE ser un objeto JSON que se ajuste estrictamente al esquema proporc
     } catch (error) {
         console.error("Error calling Gemini API for team analysis:", error);
         throw new Error("Failed to generate team analysis from Gemini API.");
+    }
+};
+
+
+export const summarizeCard = async (card: Card): Promise<string> => {
+    const commentsText = (card.comments || [])
+        .slice(-5) // Get last 5 comments
+        .map(c => `${c.userName}: "${c.text}"`)
+        .join('\n');
+
+    const prompt = `Eres un asistente de gestión de proyectos. Tu tarea es resumir una tarjeta (task) para que alguien pueda entender rápidamente su estado actual.
+
+**Datos de la Tarjeta:**
+- **Título:** ${card.title}
+- **Descripción:** ${card.description || 'No hay descripción.'}
+- **Últimos Comentarios:**
+${commentsText || 'No hay comentarios.'}
+
+**Instrucción:**
+Genera un resumen conciso en un solo párrafo en español. El resumen debe enfocarse en el objetivo principal de la tarea, su estado actual y cualquier pregunta o bloqueo evidente mencionado en los comentarios. No uses más de 3 frases.`;
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+
+        return response.text.trim();
+
+    } catch (error) {
+        console.error("Error calling Gemini API for card summary:", error);
+        throw new Error("Failed to generate card summary from Gemini API.");
+    }
+};
+
+export const generateTeamReport = async (team: Team, users: User[]): Promise<TeamReport> => {
+    const simplifiedData = {
+        teamName: team.name,
+        totalMembers: team.members.length,
+        totalBoards: team.boards.length,
+        boards: team.boards.map(b => {
+            const allCards = b.lists.flatMap(l => l.cards);
+            const doneCards = allCards.filter(c => ['done', 'hecho', 'finalizado'].includes(b.lists.find(l => l.cards.some(card => card.id === c.id))?.title.toLowerCase() || ''));
+            return {
+                title: b.title,
+                totalTasks: allCards.length,
+                completedTasks: doneCards.length,
+                overdueTasks: allCards.filter(c => c.dueDate && new Date(c.dueDate) < new Date()).length
+            };
+        })
+    };
+
+    const prompt = `Actúa como un experto analista de proyectos y coach de equipos Agile. Analiza los siguientes datos de un equipo y genera un informe estratégico conciso en español.
+
+**Datos del Equipo:**
+\`\`\`json
+${JSON.stringify(simplifiedData, null, 2)}
+\`\`\`
+
+**Tu Tarea:**
+Crea un informe que ayude al líder del equipo a entender la situación actual y a tomar decisiones. El informe debe contener:
+1.  **summary:** Un resumen ejecutivo de 2-3 frases sobre la salud general del equipo y su progreso.
+2.  **positives:** Una lista de 2-3 puntos positivos o "victorias" observables en los datos (ej: buen progreso en un proyecto, baja cantidad de tareas vencidas).
+3.  **improvements:** Una lista de 2-3 áreas de mejora o riesgos potenciales (ej: un proyecto con muchas tareas y poco progreso, alta proporción de tareas vencidas).
+4.  **actionItems:** Una lista de 2-3 recomendaciones claras y accionables para el equipo o su líder.
+
+La salida DEBE ser un objeto JSON que se ajuste estrictamente al esquema proporcionado.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        summary: { type: Type.STRING },
+                        positives: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        actionItems: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    },
+                    required: ["summary", "positives", "improvements", "actionItems"]
+                }
+            }
+        });
+
+        const jsonString = response.text.trim();
+        const parsedResponse: TeamReport = JSON.parse(jsonString);
+
+        if (!parsedResponse.summary || !parsedResponse.positives || !parsedResponse.improvements || !parsedResponse.actionItems) {
+            throw new Error("Invalid report response format from Gemini API.");
+        }
+
+        return parsedResponse;
+
+    } catch (error) {
+        console.error("Error calling Gemini API for team report:", error);
+        throw new Error("Failed to generate team report from Gemini API.");
     }
 };
